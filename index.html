@@ -145,8 +145,9 @@
     opacity:0;transition:opacity .2s ease;text-shadow:0 2px 12px rgba(0,0,0,.55);pointer-events:none}
   .mday.show{opacity:1}
   @media (max-width:760px){
+    .stage{overflow:visible}                 /* let sticky work (window scroll) */
     .mday{display:block}
-    .lockup{position:fixed;top:22px;left:22px;z-index:30}
+    .lockup{position:sticky;top:14px;z-index:30}  /* title stays top-left, keeps its space (no overlap) */
   }
 
   /* race editor */
