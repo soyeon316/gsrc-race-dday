@@ -159,6 +159,8 @@
   .ed-add{margin:0 14px 12px;padding:9px;width:calc(100% - 28px);border:1px dashed rgba(255,255,255,.22);background:transparent;color:rgba(255,255,255,.7);border-radius:9px;cursor:pointer;font-weight:700;font-size:13px}
   .ed-add:hover{border-color:rgba(255,255,255,.45);color:#fff}
   .ed-foot{display:flex;align-items:center;gap:8px;padding:14px 18px;border-top:1px solid var(--line)}
+  .ed-pass{background:#1c1c22;border:1px solid var(--line);color:var(--ink);border-radius:999px;padding:8px 14px;font-size:13px;font-family:var(--ui);width:150px}
+  .ed-pass:focus{outline:2px solid var(--accent);outline-offset:-1px}
   .ed-btn{border:1px solid var(--line);background:transparent;color:var(--ink);border-radius:999px;padding:8px 16px;font-weight:700;font-size:13px;cursor:pointer}
   .ed-btn.primary{background:rgba(255,255,255,.92);color:#14141a;border-color:transparent}
   .ed-btn.ghost{color:var(--muted);border-color:transparent}
@@ -235,8 +237,9 @@
   <div class="ed-rows" id="ed-rows"></div>
   <button id="ed-add" class="ed-add">+ 대회 추가</button>
   <div class="ed-foot">
-    <button id="ed-reset" class="ed-btn ghost">기본값 복원</button>
+    <input id="ed-pass" class="ed-pass" type="password" placeholder="편집 비밀번호" autocomplete="off">
     <span style="flex:1"></span>
+    <button id="ed-reset" class="ed-btn ghost">기본값 복원</button>
     <button id="ed-cancel" class="ed-btn">취소</button>
     <button id="ed-save" class="ed-btn primary">저장</button>
   </div>
@@ -255,10 +258,30 @@ const DEFAULT_RACES = [
   ["trail","2026-10-03","트랜스제주"],["trail","2026-10-24","GTWS 무주트레일"],
   ["trail","2026-10-31","울주9피크"],
 ];
+// ── data layer: Supabase (auto REST) + localStorage cache + default fallback ──
+const SB_URL = "https://tfztokwsttuumarjmayi.supabase.co";
+const SB_KEY = "sb_publishable_-gkhxpAM1xf4L1XMfBf_qQ_oHcYKgq3";  // publishable key — public by design, guarded by RLS
+const SB_H = { apikey: SB_KEY, Authorization: "Bearer "+SB_KEY, "Content-Type": "application/json" };
 const LS_KEY = "gsrc-races-2026";
-function loadRaces(){ try{ const s=localStorage.getItem(LS_KEY); if(s){ const a=JSON.parse(s); if(Array.isArray(a)&&a.length) return a; } }catch(e){} return DEFAULT_RACES.map(r=>r.slice()); }
-function saveRaces(){ try{ localStorage.setItem(LS_KEY, JSON.stringify(RACES)); }catch(e){} }
-let RACES = loadRaces();
+function cacheGet(){ try{ const s=localStorage.getItem(LS_KEY); if(s){ const a=JSON.parse(s); if(Array.isArray(a)&&a.length) return a; } }catch(e){} return null; }
+function cacheSet(list){ try{ localStorage.setItem(LS_KEY, JSON.stringify(list)); }catch(e){} }
+async function dbLoad(){
+  const r = await fetch(`${SB_URL}/rest/v1/races?select=category,date,name&order=date.asc,name.asc`, {headers:SB_H});
+  if(!r.ok) throw new Error("load "+r.status);
+  return (await r.json()).map(x=>[x.category, x.date, x.name]);
+}
+// writes go only through the password-gated Edge Function (direct anon writes are blocked by RLS)
+async function dbSave(list, password){
+  const r = await fetch(`${SB_URL}/functions/v1/save-races`, {
+    method:"POST",
+    headers:{ "Content-Type":"application/json", apikey:SB_KEY, Authorization:"Bearer "+SB_KEY },
+    body: JSON.stringify({ password, races:list })
+  });
+  if(r.status===401) throw new Error("비밀번호가 올바르지 않습니다.");
+  if(!r.ok) throw new Error("저장 실패 ("+r.status+")");
+  return r.json();
+}
+let RACES = cacheGet() || DEFAULT_RACES.map(r=>r.slice());
 const START_HOUR = 8;
 const TAG = {road:"🏃 로드", trail:"⛰️ 트레일"};
 const CATEN = {road:"Road", trail:"Trail"};
@@ -558,13 +581,19 @@ function renderEditor(){
   const box=$("ed-rows"); box.innerHTML="";
   RACES.slice().sort((a,b)=>a[1].localeCompare(b[1])).forEach(([c,i,n])=>box.appendChild(edRow(c,i,n)));
 }
-function saveEditor(){
-  RACES = [...$("ed-rows").querySelectorAll(".ed-row")].map(el=>[
+async function saveEditor(){
+  const list = [...$("ed-rows").querySelectorAll(".ed-row")].map(el=>[
     el.querySelector(".ed-cat").value,
     el.querySelector(".ed-date").value,
     el.querySelector(".ed-name").value.trim()
   ]).filter(r=>r[1] && r[2]);
-  saveRaces(); buildRows(); selected=null; $("editor").close(); draw(true); randomShape();
+  const pw = $("ed-pass").value;
+  const btn=$("ed-save"), label=btn.textContent; btn.disabled=true; btn.textContent="저장 중…";
+  try{
+    await dbSave(list, pw);                       // password checked server-side; throws on 401
+    RACES=list; cacheSet(list); buildRows(); selected=null; $("ed-pass").value=""; $("editor").close(); draw(true); randomShape();
+  }catch(e){ alert(e.message || ("저장 실패: "+e)); }
+  finally{ btn.disabled=false; btn.textContent=label; }
 }
 $("ed-open").onclick=()=>{ renderEditor(); $("editor").showModal(); };
 $("ed-close").onclick=()=>$("editor").close();
@@ -576,6 +605,10 @@ $("ed-save").onclick=saveEditor;
 draw(true);
 randomShape();
 setInterval(tick, 1000);
+
+// pull latest from DB, then re-render (cache/default already showing)
+dbLoad().then(list=>{ if(list && list.length){ RACES=list; cacheSet(list); buildRows(); selected=null; draw(false); } })
+  .catch(e=>console.warn("Supabase load failed — using cache/default", e));
 
 // ── nirnor-style stippled arc field (light dots tracing slow circles on the dark ground) ──
 (function(){
