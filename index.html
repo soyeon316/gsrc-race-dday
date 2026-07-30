@@ -1,0 +1,535 @@
+<title>2026 레이스 카운트다운</title>
+<style>
+  :root{
+    --bg:#16161a; --ink:#ececed; --muted:#9a9aa1;
+    --hot:#ff6169; --warm:#f0983c; --cool:#25a98d; --far:#b6b6bb;
+    --accent:#8b83c9; --accent-ink:#16161a;
+    --road:#e5be96; --trail:#9dae98; --sat:#6ba6de;
+    --serif:"Bodoni Moda","Bodoni 72",Didot,Georgia,serif;
+    --ui:"Helvetica Neue",Helvetica,Arial,"Apple SD Gothic Neo","Pretendard",sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{background:var(--bg);color:#fff;font-family:var(--ui);-webkit-font-smoothing:antialiased;line-height:1.4}
+
+  .stage{position:relative;min-height:100vh;overflow:hidden;background:#16161a;isolation:isolate}
+  .hero-bg{position:absolute;inset:0;z-index:0;opacity:1;transition:opacity 900ms ease}
+  #hero-bg-b{opacity:0}
+  #fx{position:absolute;inset:0;z-index:0;pointer-events:none;width:100%;height:100%}
+  .grain{position:absolute;inset:0;opacity:.8;mix-blend-mode:overlay;pointer-events:none;z-index:1;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='150' height='150'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.62' numOctaves='2'/><feColorMatrix type='saturate' values='0'/></filter><rect width='150' height='150' filter='url(%23n)' opacity='0.72'/></svg>")}
+  /* grain layer that sits ABOVE the shape (below the crisp numeral) so primitives get a grainy render look */
+  .poster-grain{position:fixed;inset:0;z-index:1;pointer-events:none;opacity:.55;mix-blend-mode:overlay;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='g'><feTurbulence type='fractalNoise' baseFrequency='0.68' numOctaves='2'/><feColorMatrix type='saturate' values='0'/></filter><rect width='180' height='180' filter='url(%23g)' opacity='0.7'/></svg>")}
+
+  .content{position:relative;z-index:2;display:grid;grid-template-columns:1fr 400px;min-height:100vh}
+
+  /* ── poster (left) ── */
+  .poster{position:relative;display:flex}
+  .shape-layer{position:fixed;inset:0;z-index:1;display:flex;align-items:center;justify-content:center;pointer-events:none}
+  .shape{display:block;position:absolute;inset:0;width:100%;height:100%}
+  .hero-grid{position:relative;z-index:1;flex:1;display:grid;grid-template-rows:auto 1fr auto;
+    min-height:100vh;min-height:100svh;box-sizing:border-box;padding:clamp(22px,3vw,50px)}
+  .lockup{display:flex;align-items:center;gap:13px}
+  .mark{display:block;width:clamp(30px,3vw,42px);height:auto;margin-top:2px}
+  .mark svg,.mark path{fill:#fff}
+  .lk-t{display:grid;gap:3px}
+  .lk-t .a{font-size:clamp(13px,1.2vw,17px);letter-spacing:.02em;font-weight:600}
+  .lk-t .b{font-size:clamp(11px,.95vw,13px);letter-spacing:.02em;color:rgba(255,255,255,.72);font-variant-numeric:tabular-nums}
+  .hero-main{display:grid;place-items:center;align-content:center;text-align:center;animation:xl-fade 900ms ease both}
+  .eyebrow{font-size:clamp(15px,1.7vw,22px);letter-spacing:.04em;font-weight:700;margin-bottom:clamp(6px,1vw,12px);text-wrap:balance}
+  .numeral{font-family:var(--serif);font-weight:500;font-size:clamp(72px,11vw,200px);line-height:.92;letter-spacing:.01em;text-shadow:0 10px 60px rgba(0,0,0,.4)}
+  .ticker{margin-top:clamp(12px,1.8vw,26px);display:flex;align-items:center;gap:clamp(10px,1.4vw,20px);
+    font-size:clamp(11px,.9vw,14px);letter-spacing:.28em;color:rgba(255,255,255,.75);font-variant-numeric:tabular-nums}
+  .ticker .rule{width:clamp(28px,4vw,64px);height:1px;background:rgba(255,255,255,.35)}
+  .hero-foot{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;flex-wrap:wrap}
+  .strip{display:flex;align-items:flex-end;gap:clamp(9px,1.3vw,20px)}
+  .st{display:grid;gap:7px;justify-items:center;opacity:.34;transition:opacity 260ms ease}
+  .st.on{opacity:1}
+  .st .l{font-family:var(--serif);font-size:clamp(11px,1vw,15px);letter-spacing:.06em}
+  .st .bar{width:clamp(24px,3.4vw,52px);height:1px;background:#fff}
+  .st.on .bar{height:3px}
+  .credits{text-align:right;display:grid;gap:2px}
+  .credits b{font-family:var(--serif);font-size:clamp(20px,2.2vw,30px);font-weight:500;font-variant-numeric:tabular-nums;line-height:1}
+  .credits small{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:rgba(255,255,255,.72)}
+  .stage.done .numeral{color:#fff}
+  @keyframes xl-drift{0%{transform:translate3d(0,0,0) rotate(0)}50%{transform:translate3d(0,-16px,0) rotate(2deg)}100%{transform:translate3d(0,0,0) rotate(0)}}
+  @keyframes xl-fade{from{opacity:0}to{opacity:1}}
+
+  /* ── list column (right) — blended into the field, no card ── */
+  .list-col{position:relative;z-index:2;background:transparent;min-width:0}
+  /* full-viewport-width dim so the transition is gradual and has no column edge */
+  .dim{position:absolute;inset:0;z-index:1;pointer-events:none;
+    background:linear-gradient(100deg, rgba(6,6,10,0) 20%, rgba(6,6,10,.82) 100%)}
+  .lc-inner{position:relative;display:flex;flex-direction:column;height:100vh;height:100svh;
+    padding:clamp(22px,2.6vw,44px) clamp(18px,1.8vw,30px)}
+  .lc-h{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex:none}
+  .lc-title{font-weight:800;font-size:clamp(15px,1.3vw,18px)}
+  .lc-title span{font-family:var(--serif);font-weight:500;color:var(--muted);letter-spacing:.1em;margin-left:4px}
+  .seg{position:relative;display:flex;gap:2px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:999px;padding:2px}
+  .seg-thumb{position:absolute;top:2px;bottom:2px;left:2px;width:calc(50% - 3px);border-radius:999px;
+    background:rgba(255,255,255,.15);transition:transform .28s cubic-bezier(.34,1.25,.5,1);z-index:0}
+  #views[data-active="cal"] .seg-thumb{transform:translateX(calc(100% + 2px))}
+  .seg button{position:relative;z-index:1;border:0;background:transparent;color:rgba(255,255,255,.5);
+    padding:5px 7px;border-radius:999px;cursor:pointer;display:flex;align-items:center;transition:color .2s}
+  .seg button:hover{color:rgba(255,255,255,.8)}
+  .seg button[aria-selected="true"]{color:rgba(255,255,255,.96)}
+  .seg svg{display:block;width:17px;height:17px}
+
+  .tabs{display:flex;gap:6px;margin:16px 0 4px;flex:none}
+  .tab{flex:1;border:1px solid rgba(255,255,255,.16);background:transparent;color:rgba(255,255,255,.7);
+    padding:8px 0;border-radius:30px;font-size:13px;font-weight:700;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;gap:5px;transition:.12s}
+  .tab .c{font-size:12px;font-weight:600;opacity:.7}
+  .tab[aria-selected="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+
+  .scroll{flex:1;overflow-y:auto;overscroll-behavior:contain;margin:0 -6px;padding:0 6px;
+    scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.16) transparent}
+  .scroll::-webkit-scrollbar{width:5px}
+  .scroll::-webkit-scrollbar-track{background:transparent}
+  .scroll::-webkit-scrollbar-thumb{background:rgba(255,255,255,.16);border-radius:3px}
+  .scroll::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,.28)}
+  ul{list-style:none;margin:6px 0 0;padding:0}
+  li{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:12px;
+    padding:13px 8px;border-bottom:1px solid rgba(255,255,255,.09);cursor:pointer;transition:background .12s}
+  li:hover{background:rgba(255,255,255,.05)}
+  li.sel{background:rgba(255,255,255,.07);box-shadow:inset 2px 0 0 var(--accent)}
+  li.past{opacity:.4}
+  .dot{width:7px;height:7px;border-radius:50%}
+  .row-h{display:flex;align-items:center;gap:8px}
+  .tag{font-size:10px;font-weight:700;padding:2px 6px;border-radius:999px;background:rgba(255,255,255,.1);color:rgba(255,255,255,.72)}
+  .name{font-size:14px;font-weight:600;color:#fff}
+  .date{font-size:11px;color:rgba(255,255,255,.55);font-variant-numeric:tabular-nums;margin-top:2px}
+  .dday{font-family:var(--serif);font-variant-numeric:tabular-nums;font-weight:500;font-size:20px;text-align:right;min-width:58px}
+  .foot{margin-top:14px;font-size:11px;color:rgba(255,255,255,.5);text-align:center}
+
+  .cal{display:flex;flex-direction:column;gap:18px;margin-top:6px}
+  .mo-h{font-family:var(--serif);font-size:16px;font-weight:500;margin:0 2px 7px;display:flex;align-items:baseline;gap:6px}
+  .mo-h span{font-size:12px;color:var(--muted);font-family:var(--ui);font-weight:600}
+  /* 일 · 토는 넓게, 월~금은 좁게 (경기 전부 주말) */
+  .grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:3px}
+  .wd{font-size:10px;font-weight:700;color:var(--muted);text-align:center;padding-bottom:2px}
+  .wd.sun{color:var(--hot)} .wd.sat{color:var(--sat)}
+  .cell{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:7px;min-height:52px;padding:4px;display:flex;flex-direction:column;gap:2px}
+  .cell.empty{background:transparent;border:0}
+  .cell.today{outline:2px solid var(--accent);outline-offset:-2px}
+  .dnum{font-size:10px;font-weight:700;color:var(--muted);font-variant-numeric:tabular-nums}
+  .cell.today .dnum{color:#c9c3f0}
+  .cr{font-size:9px;line-height:1.2;font-weight:700;color:var(--rc);cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-left:3px solid var(--rc);padding-left:3px}
+  .legend{display:flex;gap:14px;justify-content:center;margin-top:2px;font-size:11px;color:var(--muted)}
+  .legend i{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+
+  @media (max-width:760px){
+    .stage{min-height:auto}
+    .content{grid-template-columns:1fr}
+    .poster{min-height:78vh}
+    .hero-grid{min-height:78vh}
+    .dim{display:none}
+    .list-col{background:linear-gradient(180deg, rgba(11,11,15,0) 0%, rgba(9,9,13,.9) 12%)}
+    .lc-inner{height:auto;padding-top:8px}
+    .scroll{overflow:visible}
+  }
+  @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+
+<div class="stage" id="hero">
+  <div class="hero-bg" id="hero-bg-a"></div>
+  <div class="hero-bg" id="hero-bg-b"></div>
+  <canvas id="fx"></canvas>
+  <div class="grain"></div>
+  <div class="shape-layer"><canvas class="shape" id="glass"></canvas></div>
+  <div class="poster-grain"></div>
+  <div class="content">
+
+    <div class="poster">
+      <div class="hero-grid">
+        <div class="lockup">
+          <svg class="mark" viewBox="0 0 300 233" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <path d="M168.174 59.8625C173.629 59.7698 176.672 49.9307 176.883 43.3461C177.094 36.7698 174.758 34.4428 169.666 37.4021C164.574 40.3614 157.551 60.0312 168.174 59.8625Z"/>
+            <path d="M194.943 63.5382C200.397 63.4454 203.441 53.6064 203.652 47.0217C203.863 40.4455 199.791 36.3985 194.707 39.3663C189.614 42.3256 184.319 63.7152 194.943 63.5382Z"/>
+            <path d="M295.694 113.104C283.941 106.612 274.211 134.663 274.211 134.663C274.211 134.663 226.289 163.446 213.955 168.067C201.612 172.687 205.886 158.405 205.886 158.405C247.679 132.842 258.614 82.7863 243.135 47.9659C245.183 47.4432 271.193 40.5971 270.687 27.8494C270.165 14.5788 246.6 22.4788 246.6 22.4788C246.6 22.4788 260.005 15.5147 253.142 5.11073C246.279 -5.29322 232.933 13.213 232.933 13.213C232.933 13.213 237.326 0.819307 227.394 0.0183549C219.477 -0.622407 221.644 15.6833 222.849 22.3101C214.823 16.4084 205.077 12.353 193.67 10.8776C126.078 2.12613 119.771 62.5264 119.771 62.5264C119.771 62.5264 78.0035 57.3666 56.1839 53.7412C34.3643 50.1158 34.7268 72.1968 49.2114 76.5473C63.696 80.8977 117.992 84.8097 117.992 84.8097C112.318 125.667 147.172 137.268 147.172 137.268L96.0292 185.215C81.064 141.281 15.1666 110.803 1.71905 127.859C-11.7369 144.915 57.4654 204.877 81.8481 212.414C106.973 220.179 159.127 155.934 159.127 155.934C172.904 163.564 186.233 165.765 186.233 165.765C183.097 222.801 259.398 173.016 259.398 173.016C259.398 173.016 232.191 237.404 263.369 232.682C294.539 227.961 307.464 119.613 295.711 113.121L295.694 113.104ZM24.5083 141.34C34.6509 143.364 62.3216 161.381 61.7736 173.555C61.3436 183.116 14.3657 139.308 24.5083 141.34ZM174.868 140.438C171.15 139.561 182.355 131.982 173.679 127.404C165.004 122.825 128.953 117.505 133.556 88.2749C133.556 88.2749 173.865 96.0231 178.957 96.7734C184.041 97.5238 188.282 95.2727 189.96 89.2613C191.638 83.2415 190.238 74.4648 178.055 73.2676C165.872 72.0704 140.309 67.5935 136.153 66.2866C136.153 66.2866 136.549 15.6749 200.549 31.6686C264.55 47.6624 222.091 151.575 174.868 140.438ZM273.436 194.321C268.335 202.128 270.637 193.621 272.433 184.651C274.068 176.447 283.528 148.093 284.329 153.725C285.13 159.357 277.39 188.276 273.436 194.321Z"/>
+          </svg>
+          <div class="lk-t"><div class="a" id="hero-cat">—</div><div class="b" id="hero-date">—</div></div>
+        </div>
+        <div class="hero-main">
+          <div class="eyebrow" id="hero-name">—</div>
+          <div class="numeral" id="hero-dlabel">D–00</div>
+          <div class="ticker"><span class="rule"></span><span id="hero-clock">00 : 00 : 00</span><span class="rule"></span></div>
+        </div>
+        <div class="hero-foot">
+          <div class="strip" id="hero-strip"></div>
+          <div class="credits"><b id="hero-weeks">–</b><small>남은 주</small></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="dim"></div>
+    <aside class="list-col">
+      <div class="lc-inner">
+        <div class="lc-h">
+          <div class="lc-title">전체 일정 <span>2026</span></div>
+          <div class="seg" id="views" data-active="list">
+            <span class="seg-thumb"></span>
+            <button data-v="list" aria-selected="true" aria-label="리스트">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="9" y1="6" x2="20" y2="6"/><line x1="9" y1="12" x2="20" y2="12"/><line x1="9" y1="18" x2="20" y2="18"/><line x1="4" y1="6" x2="4.01" y2="6"/><line x1="4" y1="12" x2="4.01" y2="12"/><line x1="4" y1="18" x2="4.01" y2="18"/></svg>
+            </button>
+            <button data-v="cal" aria-selected="false" aria-label="달력">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="17" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="16" y1="2" x2="16" y2="6"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="tabs" id="tabs">
+          <button class="tab" data-f="all" aria-selected="true">All <span class="c" id="c-all"></span></button>
+          <button class="tab" data-f="road" aria-selected="false">Road <span class="c" id="c-road"></span></button>
+          <button class="tab" data-f="trail" aria-selected="false">Trail <span class="c" id="c-trail"></span></button>
+        </div>
+        <div class="scroll">
+          <ul id="list"></ul>
+          <div class="foot" id="foot"></div>
+          <div id="calview" hidden></div>
+        </div>
+      </div>
+    </aside>
+
+  </div>
+</div>
+
+<script>
+// [cat, date, name] — 대회 시작 아침 8시 기준
+const RACES = [
+  ["road","2026-09-20","공주마라톤"],["road","2026-10-04","파주북시티아트마라톤"],
+  ["road","2026-10-04","뉴발란스 런유어웨이"],["road","2026-10-11","서울레이스"],
+  ["road","2026-10-17","경주국제마라톤"],["road","2026-10-18","아시아 오픈 마라톤"],
+  ["road","2026-10-25","춘천마라톤"],["road","2026-11-01","JTBC 마라톤"],
+  ["road","2026-11-15","MBN서울마라톤"],["road","2026-11-15","가민런코리아"],
+  ["road","2026-11-15","손기정마라톤"],["road","2026-11-22","인천마라톤"],
+  ["trail","2026-08-30","Go대관령 국제트레일런"],["trail","2026-09-19","장수 트레일레이스"],
+  ["trail","2026-10-03","트랜스제주"],["trail","2026-10-24","GTWS 무주트레일"],
+  ["trail","2026-10-31","울주9피크"],
+];
+const START_HOUR = 8;
+const TAG = {road:"🏃 로드", trail:"⛰️ 트레일"};
+const CATEN = {road:"Road", trail:"Trail"};
+const WD=["일","월","화","수","목","금","토"];
+const pad = n => String(n).padStart(2,"0");
+const $ = id => document.getElementById(id);
+
+function today(){ const d=new Date(); return new Date(d.getFullYear(),d.getMonth(),d.getDate()); }
+const TODAY_ISO = `${today().getFullYear()}-${pad(today().getMonth()+1)}-${pad(today().getDate())}`;
+function target(iso){ const [y,m,d]=iso.split("-").map(Number); return new Date(y,m-1,d,START_HOUR,0,0); }
+function diffDays(iso){ const [y,m,d]=iso.split("-").map(Number);
+  return Math.round((new Date(y,m-1,d)-today())/86400000); }
+function bucket(n){ if(n<0)return"far"; if(n<=7)return"hot"; if(n<=30)return"warm"; if(n<=50)return"cool"; return"far"; }
+function ddText(n){ return n===0?"D-DAY":(n>0?"D–"+n:"종료"); }
+function fmt(iso){ const [y,m,d]=iso.split("-").map(Number);
+  return `${m}/${pad(d)} (${WD[new Date(y,m-1,d).getDay()]}) 08:00`; }
+
+const rows = RACES.map(([cat,iso,name])=>({cat,iso,name,n:diffDays(iso)}))
+  .sort((a,b)=> a.iso===b.iso ? a.name.localeCompare(b.name) : a.iso.localeCompare(b.iso));
+rows.forEach((r,i)=> r.i=i);
+
+const up = rows.filter(r=>r.n>=0);
+$("c-all").textContent = up.length;
+$("c-road").textContent = up.filter(r=>r.cat==="road").length;
+$("c-trail").textContent = up.filter(r=>r.cat==="trail").length;
+
+// ── XLINE stage system ──
+const MARKS = [50,40,30,20,10];
+// bold dual-hue glow (tint + contrast tint2) over a deep base; saturation & value-contrast escalate as the race nears
+function gradients(t,t2,gx,gy){ const gx2=100-gx, gy2=100-gy; return {
+  50:`radial-gradient(95% 80% at ${gx}% ${gy}%,${t}40 0%,rgba(0,0,0,0) 56%),linear-gradient(162deg,#151622 0%,#08080c 100%)`,
+  40:`radial-gradient(90% 78% at ${gx}% ${gy}%,${t}5c 0%,rgba(0,0,0,0) 55%),radial-gradient(60% 60% at ${gx2}% ${gy2}%,${t2}30 0%,rgba(0,0,0,0) 60%),linear-gradient(166deg,#161022 0%,#07070a 100%)`,
+  30:`radial-gradient(88% 76% at ${gx}% ${gy}%,${t}78 0%,rgba(0,0,0,0) 54%),radial-gradient(72% 64% at ${gx2}% ${gy2}%,${t2}44 0%,rgba(0,0,0,0) 60%),linear-gradient(170deg,#1a1030 0%,#060608 100%)`,
+  20:`radial-gradient(96% 82% at ${gx}% ${gy}%,${t}92 0%,rgba(0,0,0,0) 54%),radial-gradient(82% 72% at ${gx2}% ${gy2}%,${t2}5c 0%,rgba(0,0,0,0) 60%),linear-gradient(176deg,#210f34 0%,#050507 100%)`,
+  10:`radial-gradient(84% 74% at ${gx}% ${gy}%,${t}b0 0%,rgba(0,0,0,0) 52%),radial-gradient(88% 78% at ${gx2}% ${gy2}%,${t2}82 0%,rgba(0,0,0,0) 58%),radial-gradient(46% 46% at 52% 46%,#ffffff1f 0%,rgba(0,0,0,0) 58%),linear-gradient(182deg,#280f38 0%,#050506 100%)`,
+};}
+
+let view="list", filter="all", selected=null, lastStage=null, bgActive="a", rolling=false, rollTO=null;
+const pick = () => filter==="all" ? rows : rows.filter(r=>r.cat===filter);
+
+function setBg(grad){                       // crossfade between two stacked layers (gradients don't tween)
+  const nextId = bgActive==="a" ? "b" : "a";
+  const nxt=$("hero-bg-"+nextId), cur=$("hero-bg-"+bgActive);
+  nxt.style.background=grad; nxt.style.opacity=1; cur.style.opacity=0;
+  bgActive=nextId;
+}
+
+function applyStage(stage){        // background + strip; re-runs on every selection so the glow crossfades per race
+  const i = selected ? selected.i : 0;
+  const key = stage + "|" + i;      // change bg when stage OR selected race changes
+  if(key===lastStage) return;
+  lastStage=key;
+  const trail = selected && selected.cat==="trail";
+  const tint  = trail ? "#8a3ffb" : "#2f5bff";   // vivid purple / blue
+  const tint2 = trail ? "#ff3d8b" : "#12d0ff";   // contrast magenta / cyan
+  const gx = 15 + (i*41 % 70), gy = 10 + (i*27 % 30);
+  setBg(gradients(tint,tint2,gx,gy)[stage]);
+  $("hero-strip").innerHTML = MARKS.map(m=>
+    `<div class="st ${m===stage?"on":""}"><span class="l">D–${m}</span><span class="bar"></span></div>`).join("");
+}
+
+// ── glass shape: raymarched interlocking glass rings (WebGL). original impl inspired by the reference look ──
+const glass = (function(){
+  const cv=$("glass"); if(!cv) return {reseed(){}};
+  let gl=null;
+  try{ gl = cv.getContext("webgl",{alpha:true,premultipliedAlpha:false,antialias:false}) || cv.getContext("experimental-webgl"); }catch(e){}
+  if(!gl) return {reseed(){}};
+  const VS=`attribute vec2 p;void main(){gl_Position=vec4(p,0.0,1.0);}`;
+  const FS=`precision highp float;
+uniform vec2 uRes;uniform float uTime;uniform vec3 uRot;uniform float uCam;
+mat2 r2(float a){float c=cos(a),s=sin(a);return mat2(c,-s,s,c);}
+float sdT(vec3 p,vec2 t){vec2 q=vec2(length(p.xz)-t.x,p.y);return length(q)-t.y;}
+float map(vec3 p){
+  p.yz*=r2(uRot.x);p.zx*=r2(uRot.y);p.xy*=r2(uRot.z);
+  float t=uTime;
+  vec3 a=p; a.yz*=r2(t*0.32); a.xy*=r2(t*0.20);
+  float d=sdT(a,vec2(1.05,0.34));                     // big outer ring (chubby)
+  vec3 b=p; b.yz*=r2(1.5708); b.zx*=r2(t*0.32); b.xy*=r2(t*0.20+1.0);
+  d=min(d,sdT(b,vec2(0.79,0.30)));                     // inner ring (chubby), tube meets the outer ring
+  d=min(d,length(p)-0.30);                             // center sphere, detached from the rings
+  return d;
+}
+vec3 nrm(vec3 p){vec2 e=vec2(0.0012,0.0);return normalize(vec3(
+  map(p+e.xyy)-map(p-e.xyy),map(p+e.yxy)-map(p-e.yxy),map(p+e.yyx)-map(p-e.yyx)));}
+vec3 env(vec3 d){                                      // deep navy glass, bright blue toward grazing, faint warm underside
+  float y=d.y*0.5+0.5;
+  vec3 navy=vec3(0.028,0.034,0.058), blue=vec3(0.150,0.180,0.300), bright=vec3(0.560,0.610,0.760);
+  vec3 col=mix(navy,blue,smoothstep(0.08,0.62,y));
+  col=mix(col,bright,smoothstep(0.66,1.0,y));
+  col+=vec3(0.42,0.33,0.30)*pow(max(-d.y,0.0),3.0)*0.12;
+  return col;
+}
+void main(){
+  vec2 uv=(gl_FragCoord.xy-0.5*uRes)/uRes.y;
+  vec3 ro=vec3(0.0,0.0,uCam);vec3 rd=normalize(vec3(uv,-1.4));
+  float tt=0.0,hit=0.0;
+  for(int i=0;i<110;i++){vec3 pos=ro+rd*tt;float d=map(pos);if(d<0.0013){hit=1.0;break;}tt+=d*0.8;if(tt>8.0)break;}
+  vec4 o=vec4(0.0);
+  if(hit>0.5){
+    vec3 pos=ro+rd*tt;vec3 n=nrm(pos);
+    float fres=pow(1.0-max(dot(n,-rd),0.0),3.0);
+    vec3 refl=reflect(rd,n);
+    vec3 tcol;                                          // chromatic dispersion (r/g/b split)
+    tcol.r=env(refract(rd,n,0.635)).r;
+    tcol.g=env(refract(rd,n,0.65)).g;
+    tcol.b=env(refract(rd,n,0.665)).b;
+    vec3 col=mix(tcol,env(refl),clamp(fres,0.0,1.0));
+    col*=0.55+0.85*fres;                                // translucent dark body, luminous edges
+    col+=vec3(0.50,0.56,0.72)*pow(fres,1.8)*0.5;        // desaturated blue-gray edge glow
+    float spec=pow(max(dot(refl,normalize(vec3(0.35,0.75,0.55))),0.0),60.0);
+    col+=spec*vec3(0.88,0.92,1.0)*1.0;
+    o=vec4(col,clamp(0.35+0.7*fres,0.0,1.0));
+  }
+  gl_FragColor=o;
+}`;
+  function mk(t,s){const o=gl.createShader(t);gl.shaderSource(o,s);gl.compileShader(o);
+    if(!gl.getShaderParameter(o,gl.COMPILE_STATUS))console.warn(gl.getShaderInfoLog(o));return o;}
+  const pr=gl.createProgram();
+  gl.attachShader(pr,mk(gl.VERTEX_SHADER,VS));gl.attachShader(pr,mk(gl.FRAGMENT_SHADER,FS));
+  gl.linkProgram(pr);gl.useProgram(pr);
+  const bf=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,bf);
+  gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,3,-1,-1,3]),gl.STATIC_DRAW);
+  const lp=gl.getAttribLocation(pr,"p");gl.enableVertexAttribArray(lp);gl.vertexAttribPointer(lp,2,gl.FLOAT,false,0,0);
+  const uRes=gl.getUniformLocation(pr,"uRes"),uTime=gl.getUniformLocation(pr,"uTime"),uRot=gl.getUniformLocation(pr,"uRot"),uCam=gl.getUniformLocation(pr,"uCam");
+  const reduce=matchMedia("(prefers-reduced-motion:reduce)").matches;
+  let rot=[0.5,0.3,0.0], target=[0.5,0.3,0.0];
+  function frame(){
+    const mob=innerWidth<=760;
+    const s=Math.min(mob?2:1.6,window.devicePixelRatio||1), f=mob?0.9:0.8, M=mob?950:1400;
+    let w=Math.max(2,Math.round((cv.clientWidth||300)*s*f)), h=Math.max(2,Math.round((cv.clientHeight||300)*s*f));
+    if(w>M){h=Math.round(h*M/w);w=M;} if(h>M){w=Math.round(w*M/h);h=M;}
+    if(cv.width!==w||cv.height!==h){cv.width=w;cv.height=h;gl.viewport(0,0,w,h);}
+    for(let i=0;i<3;i++) rot[i]+=(target[i]-rot[i])*0.05;
+    gl.uniform2f(uRes,cv.width,cv.height);
+    gl.uniform1f(uTime, reduce?1.4:performance.now()/1000);
+    gl.uniform1f(uCam, mob?2.8:1.7);   // camera distance = object size (smaller = bigger / more bleed)
+    gl.uniform3f(uRot,rot[0],rot[1],rot[2]);
+    gl.drawArrays(gl.TRIANGLES,0,3);
+    if(!reduce) requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+  return { reseed(){ target=[Math.random()*6.283,Math.random()*6.283,Math.random()*6.283]; if(reduce) requestAnimationFrame(frame); } };
+})();
+function randomShape(){ glass.reseed(); }  // "새 도형" = 유리 오브젝트를 새 방향으로 리오리엔트
+
+function renderHero(){
+  if(!selected){
+    $("hero-cat").textContent="시즌 종료"; $("hero-date").textContent="";
+    $("hero-name").textContent="남은 대회 없음"; $("hero-dlabel").textContent="🎉";
+    $("hero-clock").textContent=""; $("hero-weeks").textContent="–";
+    applyStage(50); return;
+  }
+  $("hero-cat").textContent = `[${CATEN[selected.cat]}] ${selected.name}`;
+  $("hero-date").textContent = fmt(selected.iso);
+  $("hero-name").textContent = selected.name;
+  lastStage=null;
+  tick();
+}
+
+// title drops in from the top with a snap; number rolls like a slot reel then lands on the real D-day
+function snapTitle(){
+  const el=$("hero-name"); if(!el.animate) return;
+  el.animate([
+    {transform:"translateY(-0.55em)",opacity:0,filter:"blur(3px)"},
+    {transform:"translateY(0.07em)",opacity:1,filter:"blur(0)",offset:0.72},
+    {transform:"translateY(0)",opacity:1}
+  ],{duration:400,easing:"cubic-bezier(.2,.9,.2,1)"});
+}
+function rollDday(){
+  clearTimeout(rollTO);
+  rolling=true;
+  const el=$("hero-dlabel"), start=performance.now(), dur=420;
+  const finalDays = Math.max(0, Math.ceil((target(selected.iso).getTime()-Date.now())/86400000));
+  const digits = String(finalDays).length;                       // roll within the same digit count as the target
+  const lo = digits<=1 ? 0 : Math.pow(10,digits-1), hi = Math.pow(10,digits)-1;
+  (function step(){
+    const t=(performance.now()-start)/dur;
+    if(t>=1 || !selected){ rolling=false; tick(); return; }
+    el.textContent = "D–"+(lo + Math.floor(Math.random()*(hi-lo+1)));
+    rollTO=setTimeout(step, 16 + t*t*70);   // faster decelerating reel
+  })();
+}
+function transitionHero(){        // animated version of renderHero (used on race click / tab change)
+  rolling=true;                   // freeze the number so renderHero's tick doesn't set it
+  renderHero();
+  snapTitle();
+  rollDday();
+}
+
+function tick(){
+  if(!selected) return;
+  const ms = target(selected.iso).getTime() - Date.now();
+  const done = ms<=0;
+  $("hero").classList.toggle("done", done);
+  const s = Math.max(0, Math.floor(ms/1000));
+  const days = Math.max(0, Math.ceil(ms/86400000));
+  const h=Math.floor(s/3600)%24, mi=Math.floor(s/60)%60, se=s%60;
+  if(!rolling) $("hero-dlabel").textContent = done ? "D–DAY" : "D–"+days;
+  $("hero-clock").textContent  = done ? "출발 🏁" : `${pad(h)} : ${pad(mi)} : ${pad(se)}`;
+  $("hero-weeks").textContent  = done ? "오늘" : (days>=7 ? `${Math.floor(days/7)}주 ${days%7}일` : days+"일");
+  applyStage(MARKS.find(m=>days>m-10) ?? 10);
+}
+
+function renderList(){
+  const list = pick(), upl = list.filter(r=>r.n>=0);
+  $("list").innerHTML = list.map(r=>{
+    const b=bucket(r.n), tag = filter==="all" ? `<span class="tag">${CATEN[r.cat]}</span>` : "";
+    return `<li data-i="${r.i}" class="${r.n<0?'past ':''}${selected&&selected.i===r.i?'sel':''}">
+      <span class="dot" style="background:var(--${b})"></span>
+      <div><div class="row-h"><span class="name">${r.name}</span>${tag}</div><div class="date">${fmt(r.iso)}</div></div>
+      <div class="dday" style="color:var(--${b})">${ddText(r.n)}</div>
+    </li>`;
+  }).join("");
+  $("foot").textContent = `${list.length}개 · 남음 ${upl.length}개 · 아침 8시 기준`;
+}
+
+function renderCal(){
+  const list = pick(), byDay={};
+  for(const r of list){ (byDay[r.iso] ||= []).push(r); }
+  const isos = list.map(r=>r.iso).sort();
+  const [fy,fm] = (isos[0]||TODAY_ISO).split("-").map(Number);
+  const [ly,lm] = (isos[isos.length-1]||TODAY_ISO).split("-").map(Number);
+  const wend=(y,m,d)=>{  // weekend day cell (Sun/Sat)
+    const iso=`${y}-${pad(m)}-${pad(d)}`;
+    const chips=(byDay[iso]||[]).map(r=>`<div class="cr" data-i="${r.i}" style="--rc:var(--${r.cat})" title="${r.name}">${r.name}</div>`).join("");
+    return `<div class="cell${iso===TODAY_ISO?" today":""}"><div class="dnum">${d}</div>${chips}</div>`;
+  };
+  let html="", y=fy, m=fm;
+  while(y<ly || (y===ly && m<=lm)){
+    const first = new Date(y,m-1,1).getDay(), days = new Date(y,m,0).getDate();
+    let cells = `<div class="wd sun">일</div><div class="wd wk">월 화 수 목 금</div><div class="wd sat">토</div>`;
+    for(let day=1-first; day<=days; day+=7){          // one row per week: 일 | 월–금 | 토
+      const sun=day, sat=day+6;
+      cells += (sun>=1&&sun<=days) ? wend(y,m,sun) : `<div class="cell empty"></div>`;
+      cells += `<div class="cell wk-merge"></div>`;
+      cells += (sat>=1&&sat<=days) ? wend(y,m,sat) : `<div class="cell empty"></div>`;
+    }
+    html += `<div><div class="mo-h">${m}월 <span>${y}</span></div><div class="grid">${cells}</div></div>`;
+    m++; if(m>12){m=1;y++;}
+  }
+  html += `<div class="legend"><span><i style="background:var(--road)"></i>로드</span><span><i style="background:var(--trail)"></i>트레일</span></div>`;
+  $("calview").innerHTML = `<div class="cal">${html}</div>`;
+}
+
+function draw(animate){
+  const list = pick();
+  if(!selected || !list.includes(selected) || selected.n<0)
+    selected = list.find(r=>r.n>=0) || null;
+  $("list").hidden = view!=="list";
+  $("foot").hidden = view!=="list";
+  $("calview").hidden = view!=="cal";
+  animate ? transitionHero() : renderHero();
+  view==="list" ? renderList() : renderCal();
+}
+
+function selectByIndex(i){
+  const r = rows[i]; if(!r) return;
+  selected = r;
+  transitionHero();
+  randomShape();
+  if(view==="list") renderList();
+}
+
+$("tabs").addEventListener("click", e=>{
+  const b=e.target.closest(".tab"); if(!b) return;
+  filter=b.dataset.f; selected=null;
+  for(const t of e.currentTarget.children) t.setAttribute("aria-selected", t===b);
+  draw(true);
+  randomShape();
+});
+$("views").addEventListener("click", e=>{
+  const b=e.target.closest("button"); if(!b) return;
+  view=b.dataset.v;
+  e.currentTarget.dataset.active=view;
+  for(const t of e.currentTarget.querySelectorAll("button")) t.setAttribute("aria-selected", t===b);
+  draw(false);
+});
+$("list").addEventListener("click", e=>{ const li=e.target.closest("li"); if(li) selectByIndex(+li.dataset.i); });
+$("calview").addEventListener("click", e=>{ const cr=e.target.closest(".cr"); if(cr) selectByIndex(+cr.dataset.i); });
+
+draw(true);
+randomShape();
+setInterval(tick, 1000);
+
+// ── nirnor-style stippled arc field (light dots tracing slow circles on the dark ground) ──
+(function(){
+  const c=$("fx"); if(!c) return;
+  const ctx=c.getContext("2d");
+  const reduce = matchMedia("(prefers-reduced-motion:reduce)").matches;
+  let W,H,DPR,arcs,pts;
+  function build(){
+    DPR=Math.min(2, window.devicePixelRatio||1);
+    W=c.clientWidth||innerWidth; H=c.clientHeight||innerHeight;
+    c.width=W*DPR; c.height=H*DPR;
+    const d=Math.hypot(W,H);
+    arcs=[
+      {cx:W*0.12,cy:H*0.40,r:d*0.42,spread:d*0.055,n:1000,sp: 0.000030},
+      {cx:W*0.66,cy:H*0.16,r:d*0.56,spread:d*0.060,n:1100,sp:-0.000022},
+      {cx:W*0.88,cy:H*0.78,r:d*0.50,spread:d*0.050,n:950 ,sp: 0.000026},
+      {cx:W*0.28,cy:H*0.92,r:d*0.46,spread:d*0.058,n:850 ,sp:-0.000028},
+    ];
+    pts=[];
+    for(let ai=0;ai<arcs.length;ai++){
+      const a=arcs[ai];
+      for(let i=0;i<a.n;i++){
+        const g=(Math.random()+Math.random()+Math.random()-1.5)/1.5; // clustered near the line
+        pts.push({ai, ang:Math.random()*Math.PI*2, jit:g*a.spread});
+      }
+    }
+  }
+  function frame(t){
+    ctx.setTransform(DPR,0,0,DPR,0,0);
+    ctx.clearRect(0,0,W,H);
+    ctx.fillStyle="rgba(214,216,228,0.45)";
+    for(const p of pts){
+      const a=arcs[p.ai], ang=p.ang + t*a.sp, r=a.r + p.jit;
+      const x=a.cx + Math.cos(ang)*r, y=a.cy + Math.sin(ang)*r;
+      if(x<-2||x>W+2||y<-2||y>H+2) continue;
+      ctx.fillRect(x,y,1,1);
+    }
+    if(!reduce) requestAnimationFrame(frame);
+  }
+  build(); requestAnimationFrame(frame);
+  let rz; addEventListener("resize", ()=>{ clearTimeout(rz); rz=setTimeout(()=>{ build(); requestAnimationFrame(frame); },200); });
+})();
+</script>
