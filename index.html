@@ -661,10 +661,12 @@ dbLoad().then(list=>{ if(list && list.length){ RACES=list; cacheSet(list); build
 
 // ── mobile collapsing header: bar pins on scroll; center D-day shrinks into the top-right when it reaches the top ──
 (function(){
-  const dday=$("mbar-dday"), num=$("hero-dlabel");
+  const dday=$("mbar-dday"), num=$("hero-dlabel"), listCol=document.querySelector(".list-col");
   function onScroll(){
-    if(innerWidth>760){ dday.classList.remove("show"); return; }
-    dday.classList.toggle("show", num.getBoundingClientRect().bottom < 52);  // center D-day scrolled up to the top
+    if(innerWidth>760){ dday.classList.remove("show"); dday.style.transform=""; return; }
+    dday.classList.toggle("show", num.getBoundingClientRect().bottom < 52);   // center D-day reached the top
+    const listTop = listCol.getBoundingClientRect().top;                      // ride up with the list once it arrives
+    dday.style.transform = `translateY(${Math.min(0, listTop - 52)}px)`;
   }
   addEventListener("scroll", onScroll, {passive:true});
   addEventListener("resize", onScroll);
