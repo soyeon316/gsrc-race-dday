@@ -139,6 +139,21 @@
   }
   @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 
+  /* mobile collapsing header */
+  .mbar{position:fixed;top:0;left:0;right:0;z-index:30;display:none;align-items:center;gap:10px;
+    padding:9px 14px;color:#fff;background:rgba(10,10,14,.72);
+    backdrop-filter:blur(12px) saturate(1.2);-webkit-backdrop-filter:blur(12px) saturate(1.2);
+    border-bottom:1px solid rgba(255,255,255,.08);transform:translateY(-101%);transition:transform .3s cubic-bezier(.3,.9,.3,1)}
+  .mbar.show{transform:translateY(0)}
+  .mbar .mark{width:24px;margin:0}
+  .mbar-t{min-width:0;flex:1;display:grid;gap:1px}
+  .mbar-cat{font-size:12.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .mbar-date{font-size:10px;color:rgba(255,255,255,.6);font-variant-numeric:tabular-nums}
+  .mbar-dday{font-family:var(--serif);font-weight:500;font-size:22px;font-variant-numeric:tabular-nums;flex:none;
+    opacity:0;transform:scale(1.6);transform-origin:100% 50%;transition:opacity .28s ease,transform .28s cubic-bezier(.3,1.2,.4,1)}
+  .mbar.dday .mbar-dday{opacity:1;transform:scale(1)}
+  @media (max-width:760px){ .mbar{display:flex} }
+
   /* race editor */
   .lc-ctrls{display:flex;align-items:center;gap:8px}
   .ed-open{border:1px solid rgba(255,255,255,.16);background:transparent;color:rgba(255,255,255,.6);
@@ -171,6 +186,12 @@
   .ed-btn.ghost{color:var(--muted);border-color:transparent}
   .ed-btn:hover{border-color:rgba(255,255,255,.4)}
 </style>
+
+<div class="mbar" id="mbar" aria-hidden="true">
+  <span class="mbar-logo" id="mbar-logo"></span>
+  <div class="mbar-t"><div class="mbar-cat" id="mbar-cat">—</div><div class="mbar-date" id="mbar-date">—</div></div>
+  <div class="mbar-dday" id="mbar-dday">D–00</div>
+</div>
 
 <div class="stage" id="hero">
   <div class="hero-bg" id="hero-bg-a"></div>
@@ -454,6 +475,8 @@ function renderHero(){
   $("hero-cat").textContent = `[${CATEN[selected.cat]}] ${selected.name}`;
   $("hero-date").textContent = fmt(selected.iso);
   $("hero-name").textContent = selected.name;
+  $("mbar-cat").textContent = $("hero-cat").textContent;
+  $("mbar-date").textContent = $("hero-date").textContent;
   lastStage=null;
   tick();
 }
@@ -477,7 +500,7 @@ function rollDday(){
   (function step(){
     const t=(performance.now()-start)/dur;
     if(t>=1 || !selected){ rolling=false; tick(); return; }
-    el.textContent = "D–"+(lo + Math.floor(Math.random()*(hi-lo+1)));
+    el.textContent = "D–"+(lo + Math.floor(Math.random()*(hi-lo+1))); $("mbar-dday").textContent = el.textContent;
     rollTO=setTimeout(step, 16 + t*t*70);   // faster decelerating reel
   })();
 }
@@ -496,7 +519,7 @@ function tick(){
   const s = Math.max(0, Math.floor(ms/1000));
   const days = Math.max(0, Math.ceil(ms/86400000));
   const h=Math.floor(s/3600)%24, mi=Math.floor(s/60)%60, se=s%60;
-  if(!rolling) $("hero-dlabel").textContent = done ? "D–DAY" : "D–"+days;
+  if(!rolling){ const dl = done ? "D–DAY" : "D–"+days; $("hero-dlabel").textContent = dl; $("mbar-dday").textContent = dl; }
   $("hero-clock").textContent  = done ? "출발 🏁" : `${pad(h)} : ${pad(mi)} : ${pad(se)}`;
   $("hero-weeks").textContent  = done ? "오늘" : (days>=7 ? `${Math.floor(days/7)}주 ${days%7}일` : days+"일");
   applyStage(MARKS.find(m=>days>m-10) ?? 10);
@@ -645,6 +668,22 @@ setInterval(tick, 1000);
 // pull latest from DB, then re-render (cache/default already showing)
 dbLoad().then(list=>{ if(list && list.length){ RACES=list; cacheSet(list); buildRows(); selected=null; draw(false); } })
   .catch(e=>console.warn("Supabase load failed — using cache/default", e));
+
+// ── mobile collapsing header: bar pins on scroll; center D-day shrinks into the top-right when it reaches the top ──
+(function(){
+  const mark=document.querySelector(".lockup .mark");
+  if(mark) $("mbar-logo").appendChild(mark.cloneNode(true));
+  const mbar=$("mbar"), num=$("hero-dlabel");
+  function onScroll(){
+    if(innerWidth>760){ mbar.classList.remove("show","dday"); return; }
+    const y = scrollY || document.documentElement.scrollTop || 0;
+    mbar.classList.toggle("show", y > 8);
+    mbar.classList.toggle("dday", num.getBoundingClientRect().bottom < 52);  // real D-day scrolled up under the bar
+  }
+  addEventListener("scroll", onScroll, {passive:true});
+  addEventListener("resize", onScroll);
+  onScroll();
+})();
 
 // ── nirnor-style stippled arc field (light dots tracing slow circles on the dark ground) ──
 (function(){
