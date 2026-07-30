@@ -139,18 +139,15 @@
   }
   @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 
-  /* mobile: existing top title stays fixed at left, D-day pins top-right — no bar, no dim */
-  .mbar{position:fixed;top:0;left:0;right:0;z-index:30;display:none;align-items:flex-start;gap:12px;
-    padding:22px;color:#fff;pointer-events:none;opacity:0;transition:opacity .2s ease}
-  .mbar.show{opacity:1}
-  .mbar .mark{width:24px;margin:0}
-  .mbar-t{min-width:0;flex:1;display:grid;gap:2px;margin-top:2px}
-  .mbar-cat{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .mbar-date{font-size:11px;color:rgba(255,255,255,.72);font-variant-numeric:tabular-nums}
-  .mbar-dday{font-family:var(--serif);font-weight:500;font-size:26px;font-variant-numeric:tabular-nums;flex:none;
-    opacity:0;transition:opacity .2s ease;text-shadow:0 2px 12px rgba(0,0,0,.55)}
-  .mbar.dday .mbar-dday{opacity:1}
-  @media (max-width:760px){ .mbar{display:flex} }
+  /* mobile: original top-left title just goes fixed; D-day pins top-right on scroll */
+  .mday{position:fixed;top:22px;right:20px;z-index:31;display:none;
+    font-family:var(--serif);font-weight:500;font-size:26px;font-variant-numeric:tabular-nums;color:#fff;
+    opacity:0;transition:opacity .2s ease;text-shadow:0 2px 12px rgba(0,0,0,.55);pointer-events:none}
+  .mday.show{opacity:1}
+  @media (max-width:760px){
+    .mday{display:block}
+    .lockup{position:fixed;top:22px;left:22px;z-index:30}
+  }
 
   /* race editor */
   .lc-ctrls{display:flex;align-items:center;gap:8px}
@@ -185,11 +182,7 @@
   .ed-btn:hover{border-color:rgba(255,255,255,.4)}
 </style>
 
-<div class="mbar" id="mbar" aria-hidden="true">
-  <span class="mbar-logo" id="mbar-logo"></span>
-  <div class="mbar-t"><div class="mbar-cat" id="mbar-cat">—</div><div class="mbar-date" id="mbar-date">—</div></div>
-  <div class="mbar-dday" id="mbar-dday">D–00</div>
-</div>
+<div class="mday" id="mbar-dday" aria-hidden="true">D–00</div>
 
 <div class="stage" id="hero">
   <div class="hero-bg" id="hero-bg-a"></div>
@@ -473,8 +466,6 @@ function renderHero(){
   $("hero-cat").textContent = `[${CATEN[selected.cat]}] ${selected.name}`;
   $("hero-date").textContent = fmt(selected.iso);
   $("hero-name").textContent = selected.name;
-  $("mbar-cat").textContent = $("hero-cat").textContent;
-  $("mbar-date").textContent = $("hero-date").textContent;
   lastStage=null;
   tick();
 }
@@ -669,14 +660,10 @@ dbLoad().then(list=>{ if(list && list.length){ RACES=list; cacheSet(list); build
 
 // ── mobile collapsing header: bar pins on scroll; center D-day shrinks into the top-right when it reaches the top ──
 (function(){
-  const mark=document.querySelector(".lockup .mark");
-  if(mark) $("mbar-logo").appendChild(mark.cloneNode(true));
-  const mbar=$("mbar"), num=$("hero-dlabel");
+  const dday=$("mbar-dday"), num=$("hero-dlabel");
   function onScroll(){
-    if(innerWidth>760){ mbar.classList.remove("show","dday"); return; }
-    const y = scrollY || document.documentElement.scrollTop || 0;
-    mbar.classList.toggle("show", y > 8);
-    mbar.classList.toggle("dday", num.getBoundingClientRect().bottom < 52);  // real D-day scrolled up under the bar
+    if(innerWidth>760){ dday.classList.remove("show"); return; }
+    dday.classList.toggle("show", num.getBoundingClientRect().bottom < 52);  // center D-day scrolled up to the top
   }
   addEventListener("scroll", onScroll, {passive:true});
   addEventListener("resize", onScroll);
