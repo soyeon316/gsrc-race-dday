@@ -387,7 +387,7 @@ function applyStage(stage){        // background + strip; re-runs on every selec
 const glass = (function(){
   const cv=$("glass"); if(!cv) return {reseed(){}};
   let gl=null;
-  try{ gl = cv.getContext("webgl",{alpha:true,premultipliedAlpha:false,antialias:false}) || cv.getContext("experimental-webgl"); }catch(e){}
+  try{ gl = cv.getContext("webgl",{alpha:true,premultipliedAlpha:false,antialias:false,preserveDrawingBuffer:true}) || cv.getContext("experimental-webgl"); }catch(e){}
   if(!gl) return {reseed(){}};
   const VS=`attribute vec2 p;void main(){gl_Position=vec4(p,0.0,1.0);}`;
   const FS=`precision highp float;
@@ -609,16 +609,56 @@ function selectFromHash(){
   if(r){ selected = r; return true; }
   return false;
 }
+const UIF = `"Helvetica Neue","Apple SD Gothic Neo",Arial,sans-serif`;
+const SERIFF = `"Bodoni Moda","Bodoni 72",Didot,Georgia,serif`;
+const hexA = (h,a)=>{ const n=parseInt(h.slice(1),16); return `rgba(${(n>>16)&255},${(n>>8)&255},${n&255},${a})`; };
+function makeShareImage(){                       // renders a D-day card that mirrors the screen
+  const W=1080, H=1440, c=document.createElement("canvas"); c.width=W; c.height=H;
+  const x=c.getContext("2d");
+  const days = Math.max(0, Math.ceil((target(selected.iso).getTime()-Date.now())/86400000));
+  const dtxt = days<=0 ? "D–DAY" : "D–"+days;
+  const trail = selected.cat==="trail";
+  const tint  = trail ? "#8a3ffb" : "#2f5bff";
+  // background
+  let g=x.createLinearGradient(0,0,0,H); g.addColorStop(0,"#1a1030"); g.addColorStop(1,"#060608");
+  x.fillStyle=g; x.fillRect(0,0,W,H);
+  let rg=x.createRadialGradient(W*0.34,H*0.30,0, W*0.34,H*0.30, W*1.05);
+  rg.addColorStop(0,hexA(tint,0.55)); rg.addColorStop(0.55,hexA(tint,0)); x.fillStyle=rg; x.fillRect(0,0,W,H);
+  // glass object snapshot (behind text)
+  try{ const gc=$("glass"); if(gc && gc.width>2){ const gw=W*1.02, gh=gw*(gc.height/gc.width);
+    x.globalAlpha=0.92; x.drawImage(gc,(W-gw)/2, H*0.52-gh/2, gw, gh); x.globalAlpha=1; } }catch(e){}
+  // lockup (top-left)
+  x.textAlign="left"; x.fillStyle="#fff"; x.font=`600 30px ${UIF}`;
+  x.fillText(`[${CATEN[selected.cat]}] ${selected.name}`, 64, 90);
+  x.fillStyle="rgba(255,255,255,.72)"; x.font=`400 25px ${UIF}`; x.fillText(fmt(selected.iso), 64, 130);
+  // center
+  x.textAlign="center";
+  x.fillStyle="#fff"; x.font=`700 44px ${UIF}`; x.fillText(selected.name, W/2, H*0.46);
+  x.font=`500 240px ${SERIFF}`; x.fillText(dtxt, W/2, H*0.46+200);
+  // footer
+  x.font=`500 28px ${SERIFF}`; x.fillStyle="rgba(255,255,255,.7)";
+  x.fillText("RACE COUNTDOWN · 2026", W/2, H-72);
+  return new Promise(res=> c.toBlob(res, "image/png"));
+}
 $("share").onclick = async () => {
   if(!selected) return;
   const days = Math.max(0, Math.ceil((target(selected.iso).getTime()-Date.now())/86400000));
   const dtxt = days<=0 ? "오늘 레이스! 🏁" : "D-"+days;
   const url  = location.origin + location.pathname + "#r=" + encodeURIComponent(selected.name);
-  const text = `🏃 ${selected.name} · ${dtxt}\n${fmt(selected.iso)}`;
+  const text = `🏃 ${selected.name} · ${dtxt}`;
+  const btn=$("share"); btn.disabled=true; btn.style.opacity=.5;
   try{
-    if(navigator.share){ await navigator.share({ title:"레이스 카운트다운", text, url }); }
-    else{ await navigator.clipboard.writeText(text+"\n"+url); alert("공유 링크를 복사했어요.\n카카오톡에 붙여넣기 하세요."); }
-  }catch(e){ /* cancelled */ }
+    const blob = await makeShareImage();
+    const file = new File([blob], "dday.png", {type:"image/png"});
+    if(navigator.canShare && navigator.canShare({files:[file]})){
+      await navigator.share({ files:[file], text, url });
+    } else {                                      // desktop / unsupported → download the image
+      const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="dday.png"; a.click();
+      setTimeout(()=>URL.revokeObjectURL(a.href), 5000);
+      alert("D-day 이미지를 저장했어요.\n카카오톡에 사진으로 첨부해 보내세요.");
+    }
+  }catch(e){ if(e.name!=="AbortError") alert("공유 실패: "+(e.message||e)); }
+  finally{ btn.disabled=false; btn.style.opacity=1; }
 };
 
 // ── race editor popup (persists to localStorage) ──
