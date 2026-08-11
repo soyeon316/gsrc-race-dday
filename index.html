@@ -657,11 +657,14 @@ $("share").onclick = async () => {
     const blob = await makeShareImage();
     const file = new File([blob], "dday.png", {type:"image/png"});
     if(navigator.canShare && navigator.canShare({files:[file]})){
-      await navigator.share({ files:[file], text, url });
-    } else {                                      // desktop / unsupported → download the image
-      const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="dday.png"; a.click();
-      setTimeout(()=>URL.revokeObjectURL(a.href), 5000);
-      alert("D-day 이미지를 저장했어요.\n카카오톡에 사진으로 첨부해 보내세요.");
+      await navigator.share({ files:[file], text });        // photo → KakaoTalk
+    } else if(navigator.share){
+      await navigator.share({ text, url });                 // no file support → text + deep link
+    } else {                                                // desktop no Web Share → open image + copy link
+      const u=URL.createObjectURL(blob); window.open(u,"_blank");
+      try{ await navigator.clipboard.writeText(text+"\n"+url); }catch(_){}
+      setTimeout(()=>URL.revokeObjectURL(u), 8000);
+      alert("이미지를 새 탭에 열었어요.\n저장해서 카카오톡에 첨부하세요. (링크는 복사됨)");
     }
   }catch(e){ if(e.name!=="AbortError") alert("공유 실패: "+(e.message||e)); }
   finally{ btn.disabled=false; btn.style.opacity=1; }
