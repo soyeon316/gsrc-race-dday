@@ -44,6 +44,13 @@
   .lk-t{display:grid;gap:3px}
   .lk-t .a{font-size:clamp(13px,1.2vw,17px);letter-spacing:.02em;font-weight:600}
   .lk-t .b{font-size:clamp(11px,.95vw,13px);letter-spacing:.02em;color:rgba(255,255,255,.72);font-variant-numeric:tabular-nums}
+  .share{position:absolute;top:clamp(22px,3vw,50px);right:clamp(22px,3vw,50px);z-index:4;
+    width:38px;height:38px;border-radius:999px;border:1px solid rgba(255,255,255,.2);
+    background:rgba(255,255,255,.06);color:#fff;display:flex;align-items:center;justify-content:center;
+    cursor:pointer;-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);transition:background .15s,border-color .15s}
+  .share:hover{background:rgba(255,255,255,.14);border-color:rgba(255,255,255,.4)}
+  .share:active{transform:scale(.94)}
+  .share svg{width:17px;height:17px}
   .hero-main{display:grid;place-items:center;align-content:center;text-align:center;animation:xl-fade 900ms ease both}
   .eyebrow{font-size:clamp(15px,1.7vw,22px);letter-spacing:.04em;font-weight:700;margin-bottom:clamp(6px,1vw,12px);text-wrap:balance}
   .numeral{font-family:var(--serif);font-weight:500;font-size:clamp(72px,11vw,200px);line-height:.92;letter-spacing:.01em;text-shadow:0 10px 60px rgba(0,0,0,.4)}
@@ -204,6 +211,9 @@
           </svg>
           <div class="lk-t"><div class="a" id="hero-cat">—</div><div class="b" id="hero-date">—</div></div>
         </div>
+        <button class="share" id="share" aria-label="이 대회 공유" title="공유">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.6" y1="13.5" x2="15.4" y2="17.5"/><line x1="15.4" y1="6.5" x2="8.6" y2="10.5"/></svg>
+        </button>
         <div class="hero-main">
           <div class="eyebrow" id="hero-name">—</div>
           <div class="numeral" id="hero-dlabel">D–00</div>
@@ -592,6 +602,25 @@ $("views").addEventListener("click", e=>{
 $("list").addEventListener("click", e=>{ const li=e.target.closest("li"); if(li) selectByIndex(+li.dataset.i); });
 $("calview").addEventListener("click", e=>{ const cr=e.target.closest(".cr"); if(cr) selectByIndex(+cr.dataset.i); });
 
+// share the currently-shown race (native share sheet → KakaoTalk on mobile; clipboard fallback on desktop)
+function selectFromHash(){
+  const m = (location.hash||"").match(/^#r=(.+)/); if(!m) return false;
+  const r = rows.find(x => x.name === decodeURIComponent(m[1]));
+  if(r){ selected = r; return true; }
+  return false;
+}
+$("share").onclick = async () => {
+  if(!selected) return;
+  const days = Math.max(0, Math.ceil((target(selected.iso).getTime()-Date.now())/86400000));
+  const dtxt = days<=0 ? "오늘 레이스! 🏁" : "D-"+days;
+  const url  = location.origin + location.pathname + "#r=" + encodeURIComponent(selected.name);
+  const text = `🏃 ${selected.name} · ${dtxt}\n${fmt(selected.iso)}`;
+  try{
+    if(navigator.share){ await navigator.share({ title:"레이스 카운트다운", text, url }); }
+    else{ await navigator.clipboard.writeText(text+"\n"+url); alert("공유 링크를 복사했어요.\n카카오톡에 붙여넣기 하세요."); }
+  }catch(e){ /* cancelled */ }
+};
+
 // ── race editor popup (persists to localStorage) ──
 function edRow(cat,iso,name){
   const el=document.createElement("div"); el.className="ed-row";
@@ -651,12 +680,13 @@ $("ed-add").onclick=()=>{ const el=edRow("road","",""); $("ed-rows").appendChild
 $("ed-reset").onclick=()=>{ if(confirm("기본 대회 목록으로 되돌릴까요? 저장해야 실제 반영됩니다.")){ const box=$("ed-rows"); box.innerHTML=""; DEFAULT_RACES.slice().sort((a,b)=>a[1].localeCompare(b[1])).forEach(([c,i,n])=>box.appendChild(edRow(c,i,n))); } };
 $("ed-save").onclick=saveEditor;
 
+selectFromHash();
 draw(true);
 randomShape();
 setInterval(tick, 1000);
 
 // pull latest from DB, then re-render (cache/default already showing)
-dbLoad().then(list=>{ if(list && list.length){ RACES=list; cacheSet(list); buildRows(); selected=null; draw(false); } })
+dbLoad().then(list=>{ if(list && list.length){ RACES=list; cacheSet(list); buildRows(); selected=null; selectFromHash(); draw(false); } })
   .catch(e=>console.warn("Supabase load failed — using cache/default", e));
 
 // ── mobile collapsing header: bar pins on scroll; center D-day shrinks into the top-right when it reaches the top ──
