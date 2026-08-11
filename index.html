@@ -154,6 +154,8 @@
     font-family:var(--serif);font-weight:500;font-size:26px;font-variant-numeric:tabular-nums;color:#fff;
     opacity:0;transition:opacity .2s ease;text-shadow:0 2px 12px rgba(0,0,0,.55);pointer-events:none}
   .mday.show{opacity:1}
+  .wm{position:fixed;bottom:9px;left:0;right:0;z-index:5;pointer-events:none;text-align:center;
+    font-family:var(--ui);font-size:10px;letter-spacing:.14em;color:rgba(255,255,255,.3)}
   @media (max-width:760px){
     .stage{overflow:visible}                 /* let sticky work (window scroll) */
     .mday{display:block}
@@ -194,6 +196,7 @@
 </style>
 
 <div class="mday" id="mbar-dday" aria-hidden="true">D–00</div>
+<div class="wm">GSRC Race Countdown © noe</div>
 
 <div class="stage" id="hero">
   <div class="hero-bg" id="hero-bg-a"></div>
