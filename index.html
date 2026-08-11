@@ -646,6 +646,16 @@ function makeShareImage(){                       // renders a D-day card that mi
   x.fillText("GSRC Race Countdown © NOE", W/2, H-70);
   return new Promise(res=> c.toBlob(res, "image/png"));
 }
+function showImageOverlay(blob){       // in-app browsers (KakaoTalk etc.): show image inline to long-press-save
+  const u = URL.createObjectURL(blob);
+  const ov = document.createElement("div");
+  ov.style.cssText = "position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.92);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:22px";
+  ov.innerHTML = `<img src="${u}" style="max-width:100%;max-height:74vh;border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,.5)">
+    <div style="color:#fff;font-size:14px;line-height:1.5;text-align:center;opacity:.9;font-family:${UIF}">이미지를 <b>길게 눌러 저장</b>한 뒤<br>카톡 대화방에 사진으로 첨부하세요</div>
+    <button style="border:0;background:#fff;color:#111;border-radius:999px;padding:11px 26px;font-weight:800;font-family:${UIF}">닫기</button>`;
+  ov.querySelector("button").onclick = ()=>{ ov.remove(); URL.revokeObjectURL(u); };
+  document.body.appendChild(ov);
+}
 $("share").onclick = async () => {
   if(!selected) return;
   const days = Math.max(0, Math.ceil((target(selected.iso).getTime()-Date.now())/86400000));
@@ -660,11 +670,9 @@ $("share").onclick = async () => {
       await navigator.share({ files:[file], text });        // photo → KakaoTalk
     } else if(navigator.share){
       await navigator.share({ text, url });                 // no file support → text + deep link
-    } else {                                                // desktop no Web Share → open image + copy link
-      const u=URL.createObjectURL(blob); window.open(u,"_blank");
+    } else {                                                // in-app browser / no Web Share → show image inline
+      showImageOverlay(blob);
       try{ await navigator.clipboard.writeText(text+"\n"+url); }catch(_){}
-      setTimeout(()=>URL.revokeObjectURL(u), 8000);
-      alert("이미지를 새 탭에 열었어요.\n저장해서 카카오톡에 첨부하세요. (링크는 복사됨)");
     }
   }catch(e){ if(e.name!=="AbortError") alert("공유 실패: "+(e.message||e)); }
   finally{ btn.disabled=false; btn.style.opacity=1; }
