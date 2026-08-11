@@ -641,9 +641,9 @@ function makeShareImage(){                       // renders a D-day card that mi
   x.textAlign="center";
   x.fillStyle="#fff"; x.font=`700 44px ${UIF}`; x.fillText(selected.name, W/2, H*0.46);
   x.font=`500 240px ${SERIFF}`; x.fillText(dtxt, W/2, H*0.46+200);
-  // footer
-  x.font=`500 28px ${SERIFF}`; x.fillStyle="rgba(255,255,255,.7)";
-  x.fillText("RACE COUNTDOWN · 2026", W/2, H-72);
+  // footer watermark
+  x.font=`600 24px ${UIF}`; x.fillStyle="rgba(255,255,255,.6)";
+  x.fillText("GSRC Race Countdown © NOE", W/2, H-70);
   return new Promise(res=> c.toBlob(res, "image/png"));
 }
 $("share").onclick = async () => {
